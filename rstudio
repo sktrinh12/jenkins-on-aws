@@ -1,0 +1,23 @@
+pipeline {
+    agent any
+
+    stages {
+       stage('enter Rshiny server') {
+            steps {
+                echo 'Hello Rshiny Server'
+            }
+        }
+        stage('ssh-rshiny') {
+    
+				steps{
+            sshagent(credentials : ['rshiny-server-ssh']) {
+                script {
+                sh '''
+                        ssh -tt ubuntu@shiny.kinnate.com -o StrictHostKeyChecking=no "cd /srv/shiny-server/simple-rshiny-test/ && ls -la && sudo git pull"
+                   '''
+             }
+            }
+				}
+    } 
+		}
+}

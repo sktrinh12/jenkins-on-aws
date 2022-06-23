@@ -1,0 +1,100 @@
+pipeline {
+    agent { 
+        kubernetes{
+            label 'jenkins-slave'
+        }
+        
+    }
+    environment{
+        DOCKER_USERNAME = credentials('DOCKER_USERNAME')
+        DOCKER_PASSWORD = credentials('DOCKER_PASSWORD')
+        AWSID = credentials('AWSID')
+        ECR_PASSWORD = credentials('ECR_PASSWORD')
+        GITHUB_PAT = credentials('github-kinnate-secret-text')
+    }
+    stages {
+        stage('docker login') {
+            steps{
+                sh(script: '''
+                    echo $ECR_PASSWORD | docker login --username AWS --password-stdin $AWSID.dkr.ecr.us-west-2.amazonaws.com
+                ''', returnStdout: true) 
+            }
+        }
+
+        stage('git clone') {
+            steps{
+                sh(script: '''
+                    git clone https://spencertr:$GITHUB_PAT@github.com/Kinnate/geomean-ic50-flagger.git
+                ''', returnStdout: true) 
+            }
+        }
+
+        stage('s3 bucket download') {
+            steps {
+            withAWS(credentials:'awscredentials', region: 'us-west-2') {
+                s3Download(file: 'instantclient-basiclite-linux.x64-12.2.0.1.0.zip', bucket: 'fount-data', path: 'DevOps/instantclient-basiclite-linux.x64-12.2.0.1.0.zip')
+                s3Download(file: 'instantclient-sdk-linux.x64-12.2.0.1.0.zip', bucket: 'fount-data', path: 'DevOps/instantclient-sdk-linux.x64-12.2.0.1.0.zip')
+                sh 'ls -lt'
+            }
+            }
+        }
+
+       stage('add DNS to daemon json') {
+            steps{
+                sh(script: '''
+                sudo mkdir -p /etc/docker
+                echo "{ \"dns\": [\"10.0.0.2\", \"10.0.0.3\"] }" > /etc/docker/daemon.json
+                cat /etc/docker/daemon.json
+                ''', returnStdout: true)
+            }
+       }
+
+       stage('Build and Push Docker Image...') {
+            steps {
+                script {
+                    docker.withRegistry('$AWSID.dkr.ecr.us-west-2.amazonaws.com') {
+                        def dockerImage = docker.build("geomean-flagger-backend")
+                        dockerImage.push('latest')
+                    }
+                    sh 'docker rmi -f my-image:${env.BUILD_ID}'   
+               }
+            } 
+        }
+        
+        stage('docker build') {
+            steps{
+                
+                sh script: '''
+                echo "build param: $BUILD_PARAM"
+                cd $WORKSPACE/geomean-ic50-flagger/backend
+                docker build . -t geomean-flagger-backend --network=host
+                docker tag backend:latest $AWSID.dkr.ecr.us-west-2.amazonaws.com/geomean-flagger-backend
+                cd $WORKSPACE/geomean-ic50-flagger/frontend
+                docker build . -t geomean-flagger-frontend --network=host
+                docker tag frontend:latest $AWSID.dkr.ecr.us-west-2.amazonaws.com/geomean-flagger-frontend
+                '''
+            }
+        }
+
+        stage('docker push') {
+            steps{
+                sh(script: '''
+                    docker push $AWSID.dkr.ecr.us-west-2.amazonaws.com/geomean-flagger-backend
+                    docker push $AWSID.dkr.ecr.us-west-2.amazonaws.com/geomean-flagger-frontend
+                ''')
+            }
+        }
+        
+        stage('deploy') {
+            steps{
+                sh script: '''
+                #!/bin/bash
+                cd $WORKSPACE/geomean-ic50-flagger
+                curl -LO https://storage.googleapis.com/kubernetes-release/release/\$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl
+                chmod +x ./kubectl
+                ./kubectl rollout restart deploy/backend-deploy deploy/frontend-deploy -n gmeanflag
+                '''
+        }
+    }
+}
+}
