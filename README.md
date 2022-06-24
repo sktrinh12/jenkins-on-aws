@@ -70,4 +70,4 @@ Go into the UI and install the plugin, `kubernetes-plugin` by clicking on ‘Man
 
 ---
 
-The ‘Docker Image` field would be the tag name of the Docker image that was created from the `Dockerfile`.
+The 'Docker Image' field would be the tag name of the Docker image that was created from the `Dockerfile`.
