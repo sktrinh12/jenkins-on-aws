@@ -8,14 +8,33 @@ pipeline {
     environment{
         AWSID = credentials('AWSID')
         GITHUB_PAT = credentials('github-kinnate-secret-text')
-        ORACLE_HOST = 'dotdb-devel.fount'
+        DOCKER_PSW = credentials('DOCKER_PASSWORD')
+        ORACLE_HOST = 'dotoradb-2022-dev.fount'
         ORACLE_PORT = 1521
         ORACLE_SID = credentials('ORACLE_SID')
         ORACLE_USER = credentials('ORACLE_USER')
         ORACLE_PASS = credentials('ORACLE_PASS')
+        DOCKER_CONFIG = "${WORKSPACE}/docker.config"
+        
     }
 
+    
     stages {
+        
+        
+        
+        stage('docker login') {
+            steps {
+                script {
+                    withCredentials([aws(credentialsId: 'awscredentials', region: 'us-west-2')]) {
+                    sh '''
+                        aws ecr get-login-password --region us-west-2 | docker login --username AWS --password-stdin $AWSID.dkr.ecr.us-west-2.amazonaws.com
+                    '''
+                    }
+                }
+            }
+        }
+        
         
         stage('git clone') {
             steps{
@@ -24,6 +43,7 @@ pipeline {
                 ''', returnStdout: true) 
             }
         }
+        
         
         stage('s3 bucket download') {
             steps {
@@ -35,22 +55,57 @@ pipeline {
             }
         }
 
+        
         stage('docker build backend') {
             steps{
-                script{
-                    docker.build("geomean-flagger-backend", "--no-cache --network=host -f ${WORKSPACE}/geomean-ic50-flagger/backend/Dockerfile.prod --build-arg ORACLE_HOST=${ORACLE_HOST} --build-arg ORACLE_PORT=${ORACLE_PORT} --build-arg ORACLE_SID=${ORACLE_SID} --build-arg ORACLE_USER=${ORACLE_USER} --build-arg ORACLE_PASS=${ORACLE_PASS} --build-arg ORACLE_CREDS_ARG=yes .")
-                }
+               sh( label: 'Docker Build Backend', script:
+               '''
+                #!/bin/bash
+                set -x
+                docker build \
+                --no-cache --network=host --build-arg ORACLE_HOST=${ORACLE_HOST} --build-arg ENVIR=PROD \
+                --build-arg ORACLE_PORT=${ORACLE_PORT} --build-arg ORACLE_SID=${ORACLE_SID} --build-arg ORACLE_USER=${ORACLE_USER} \
+                --build-arg ORACLE_PASS=${ORACLE_PASS} --build-arg ORACLE_CREDS_ARG=yes \
+                -t ${AWSID}.dkr.ecr.us-west-2.amazonaws.com/geomean-flagger-backend:latest \
+                -f ${WORKSPACE}/geomean-ic50-flagger/backend/Dockerfile.prod .
+                ''', returnStdout: true
+                )
+                
             }
         }
         
         stage('docker build frontend') {
             steps{
-                script{
-                    docker.build("geomean-flagger-frontend", '--no-cache --network=host -f $WORKSPACE/geomean-ic50-flagger/frontend/Dockerfile.prod .')
-                }
+                sh( label: 'Docker Build Frontend', script:
+                '''
+                #!/bin/bash
+                set -x
+                docker build \
+                --no-cache --network=host \
+                -t $AWSID.dkr.ecr.us-west-2.amazonaws.com/geomean-flagger-frontend:latest \
+                -f $WORKSPACE/geomean-ic50-flagger/frontend/Dockerfile.prod .
+                ''', returnStdout: true
+                )
             }
         }
+        
     
+        stage('docker push to ecr') {
+            steps {
+                sh(label: 'ECR docker push frontend', script:
+                '''
+                docker push $AWSID.dkr.ecr.us-west-2.amazonaws.com/geomean-flagger-frontend:latest
+                ''', returnStdout: true
+                )
+                sh(label: 'ECR docker push backend', script:
+                '''
+                docker push $AWSID.dkr.ecr.us-west-2.amazonaws.com/geomean-flagger-backend:latest
+                ''', returnStdout: true
+                )
+            }
+        }
+        
+        /*
         stage('docker push backend') {
             steps{
                 script{
@@ -73,6 +128,7 @@ pipeline {
                 }
             }
         }
+        */
         
         stage('deploy') {
             steps{
