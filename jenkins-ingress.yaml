@@ -1,0 +1,22 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: jenkins
+  namespace: jenkins
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/scheme: internal
+    alb.ingress.kubernetes.io/tags: Environment=dev,Team=kinnate
+    alb.ingress.kubernetes.io/subnets: subnet-086ffcb03661d67a2,subnet-0b0b805254e886773,subnet-0a32ac5c4f0324666
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: jenkins
+                port:
+                  number: 8080
