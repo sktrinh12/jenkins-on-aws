@@ -22,7 +22,7 @@ RUN mkdir -p /home/${user}/.docker && cat /dev/null > /home/${user}/.docker/conf
 
 ARG AGENT_WORKDIR=/home/${user}/agent
 
-RUN apt-get update && apt-get -y install git-lfs && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get -y install git-lfs zip && rm -rf /var/lib/apt/lists/*
 RUN curl --create-dirs -fsSLo /usr/share/jenkins/agent.jar https://repo.jenkins-ci.org/public/org/jenkins-ci/main/remoting/${VERSION}/remoting-${VERSION}.jar \
   && chmod 755 /usr/share/jenkins \
   && chmod 644 /usr/share/jenkins/agent.jar \
@@ -32,6 +32,10 @@ RUN curl --create-dirs -fsSLo /usr/share/jenkins/agent.jar https://repo.jenkins-
 RUN curl -L https://github.com/docker/compose/releases/download/1.29.2/docker-compose-`uname -s`-`uname -m` -o /usr/local/bin/docker-compose \
     && chmod +x /usr/local/bin/docker-compose
     
+RUN curl https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o awscliv2.zip \
+  && unzip awscliv2.zip \
+  && ./aws/install
+
 COPY sh-jenkins-slave /usr/local/bin/jenkins-slave
 RUN chmod 777 /usr/local/bin/jenkins-slave
 
