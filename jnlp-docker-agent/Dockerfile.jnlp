@@ -1,10 +1,11 @@
 FROM adoptopenjdk/openjdk8:jdk8u292-b10-debian
 
 RUN mkdir -p /etc/docker && echo '{ dns: [10.0.0.2, 10.0.0.3] }' > /etc/docker/daemon.json
-RUN apt-get update -y && apt-get install -y curl sudo
+RUN apt-get update -y && apt-get install -y curl sudo git
 
 #Install docker
 RUN curl -sSL https://get.docker.com/ | sh
+RUN curl -fsSL https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 | bash
 
 ARG VERSION=4.14
 ARG user=jenkins
