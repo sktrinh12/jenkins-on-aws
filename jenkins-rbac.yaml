@@ -18,10 +18,10 @@ rules:
     verbs: ['create', 'delete', 'get', 'list', 'patch', 'update', 'watch']
   - apiGroups: ['']
     resources: ['pods/log']
-    verbs: ['get', 'list', 'watch']
+    verbs: ['get', 'delete', 'list', 'watch']
   - apiGroups: ['']
     resources: ['secrets']
-    verbs: ['create', 'delete', 'get', 'list', 'patch', 'update']
+    verbs: ['create', 'delete', 'get', 'list', 'patch', 'update', 'watch']
   - apiGroups: ['']
     resources: ['configmaps']
     verbs: ['create', 'delete', 'get', 'list', 'patch', 'update']
@@ -33,37 +33,35 @@ rules:
     verbs: ['create', 'delete', 'get', 'list', 'patch', 'update']
   - apiGroups: ['']
     resources: ['ingresses']
-    verbs: ['create', 'delete', 'get', 'list', 'patch', 'update']
+    verbs: ['create', 'get', 'list', 'patch', 'update']
   - apiGroups: ['*']
     resources: ['namespaces']
+    verbs: ['get', 'list', 'watch', 'create']
+  - apiGroups: ['']
+    resources: ['persistentvolumes']
     verbs: ['get', 'list', 'watch']
+  - apiGroups: ['']
+    resources: ['persistentvolumeclaims']
+    verbs: ['create', 'get', 'list', 'patch', 'update']
+  - apiGroups: ['']
+    resources: ['serviceaccounts']
+    verbs: ['create', 'get', 'list', 'patch', 'update']
 
 ---
+kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
 metadata:
   name: jenkins
-  namespace: jenkins
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: jenkins
 subjects:
+  - kind: User
+    name: jenkins
+  - kind: ServiceAccount
+    name: default
+    namespace: jenkins
   - kind: ServiceAccount
     name: jenkins
     namespace: jenkins
-
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: jenkins
-  namespace: jenkins
 roleRef:
-  apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: jenkins
-subjects:
-  - kind: ServiceAccount
-    name: jenkins
-    namespace: jenkins
+  apiGroup: rbac.authorization.k8s.io
