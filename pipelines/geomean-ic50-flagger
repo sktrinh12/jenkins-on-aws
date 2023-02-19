@@ -65,7 +65,7 @@ pipeline {
                 docker build \
                 --no-cache --network=host --build-arg ORACLE_HOST=${ORACLE_HOST} --build-arg ENVIR=PROD \
                 --build-arg ORACLE_PORT=${ORACLE_PORT} --build-arg ORACLE_SID=${ORACLE_SID} --build-arg ORACLE_USER=${ORACLE_USER} \
-                --build-arg ORACLE_PASS=${ORACLE_PASS} --build-arg ORACLE_CREDS_ARG=yes \
+                --build-arg ORACLE_PASS=${ORACLE_PASS} --build-arg ORACLE_CREDS_ARG=prod --build-arg INSTANCE_TYPE=prod\
                 -t ${AWSID}.dkr.ecr.us-west-2.amazonaws.com/geomean-flagger-backend:latest \
                 -f ${WORKSPACE}/geomean-ic50-flagger/backend/Dockerfile.prod .
                 ''', returnStdout: true
@@ -81,7 +81,7 @@ pipeline {
                 #!/bin/bash
                 set -x
                 docker build \
-                --no-cache --network=host \
+                --no-cache --network=host --build-arg REACT_APP_BACKEND_URL=http://geomean.backend.prod.kinnate:8000 \
                 -t $AWSID.dkr.ecr.us-west-2.amazonaws.com/geomean-flagger-frontend:latest \
                 -f $WORKSPACE/geomean-ic50-flagger/frontend/Dockerfile.prod .
                 ''', returnStdout: true

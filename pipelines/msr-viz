@@ -1,0 +1,116 @@
+pipeline {
+    agent { 
+        kubernetes{
+            inheritFrom 'jenkins-slave'
+        }
+        
+    }
+    environment{
+        AWSID = credentials('AWSID')
+        GITHUB_PAT = credentials('github-kinnate-secret-text')
+        DOCKER_PSW = credentials('DOCKER_PASSWORD')
+        DOCKER_CONFIG = "${WORKSPACE}/docker.config"
+        NAMESPACE = 'msr'
+        APP_NAME = 'msr-viz'
+    }
+
+    
+    stages {
+        
+        
+        
+        stage('docker login') {
+            steps {
+                script {
+                    withCredentials([aws(credentialsId: 'awscredentials', region: 'us-west-2')]) {
+                    sh '''
+                        aws ecr get-login-password --region us-west-2 | docker login --username AWS --password-stdin $AWSID.dkr.ecr.us-west-2.amazonaws.com
+                    '''
+                    }
+                }
+            }
+        }
+        
+        
+        stage('git clone') {
+            steps{
+                sh(script: '''
+                    git clone https://spencertr:$GITHUB_PAT@github.com/Kinnate/${APP_NAME}.git
+                ''', returnStdout: true) 
+                sh(script: 'set -x; ls -ltra', returnStdout:true)
+            }
+        }
+
+        
+        stage('docker build msr app') {
+            steps{
+                sh( label: 'Docker Build MSR app', script:
+                '''
+                #!/bin/bash
+                set -x
+                docker build \
+                --no-cache --network=host --build-arg REACT_APP_BACKEND_URL=http://geomean.backend.prod.kinnate:8000 \
+                --build-arg WORKSPACE=${WORKSPACE} --memory="2g" --memory-swap="4g" \
+                -t $AWSID.dkr.ecr.us-west-2.amazonaws.com/${APP_NAME} \
+                -f $WORKSPACE/$APP_NAME/Dockerfile.prod .
+                ''', returnStdout: true
+                )
+            }
+        }
+        
+        stage('docker push to ecr') {
+            steps {
+                sh(label: 'ECR docker push msr-viz', script:
+                '''
+                docker push $AWSID.dkr.ecr.us-west-2.amazonaws.com/${APP_NAME}
+                ''', returnStdout: true
+                )
+            }
+        }
+        
+        
+        stage('deploy') {
+            agent {
+                kubernetes {
+                  yaml '''
+                    apiVersion: v1
+                    kind: Pod
+                    spec:
+                      containers:
+                      - name: helm
+                        image: alpine/helm:3.11.1
+                        command:
+                        - cat
+                        tty: true
+                    '''
+                }
+            }
+            steps{
+                container('helm') {
+                sh script: '''
+                #!/bin/bash
+                cd $WORKSPACE
+                curl -LO https://storage.googleapis.com/kubernetes-release/release/\$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl
+                chmod +x ./kubectl
+                ./kubectl get ns $NAMESPACE
+                if ./kubectl get namespace $NAMESPACE > /dev/null 2>&1; then
+                  echo "Namespace $NAMESPACE already exists"
+                  ./kubectl rollout restart deploy/${APP_NAME}-deploy -n $NAMESPACE
+                else
+                  echo "Namespace $NAMESPACE does not exist; deploy using helm"
+                  git clone https://github.com/sktrinh12/helm-basic-app-chart.git
+                  cd helm-basic-app-chart
+                  helm install k8sapp-${APP_NAME} . --set service.namespace=$NAMESPACE \
+                  --set service.port=80 --set service.targetPort=80 --set nameOverride=${APP_NAME} \
+                  --set fullnameOverride=${APP_NAME} --set namespace=${NAMESPACE} \
+                  --set image.repository=${AWSID}.dkr.ecr.us-west-2.amazonaws.com/${APP_NAME} \
+                  --set image.tag=latest --set containers.name=react \
+                  --set containers.ports.containerPort=80 --set app=${APP_NAME} \
+                  --set terminationGracePeriodSeconds=10 --set service.type=LoadBalancer
+                fi
+                '''
+                }
+            }
+        }
+    }
+}

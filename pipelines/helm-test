@@ -1,0 +1,110 @@
+pipeline {
+    agent { 
+        kubernetes {
+            label 'jenkins-slave'
+        }
+    }
+    environment{
+        NAMESPACE = 'msr'
+        APP_NAME = 'msr-viz'
+    }
+
+    stages {
+        stage('Helm') {
+            
+         agent {
+           kubernetes {
+                 containerTemplate {
+                   name 'helm'
+                   image 'alpine/helm:3.11.1'
+                   ttyEnabled true
+                   command 'cat'
+              }
+            }
+         }
+            
+            steps {
+               container('helm') { 
+                 sh 'helm repo add bitnami https://charts.bitnami.com/bitnami'
+                 sh "helm version"
+                 sh 'helm install redis-svc bitnami/redis --namespace $NAMESPACE --dry-run --debug'
+               }    
+             }
+        } 
+    }
+}
+
+
+pipeline {
+    agent { 
+        kubernetes {
+        inheritFrom  'jenkins-slave'
+      yaml '''
+      spec:
+        containers:
+        - name: helm
+          image: alpine/helm:3.11.1
+          command:
+          - cat
+          tty: true
+        '''
+        }
+    }
+    environment{
+        NAMESPACE = 'msr'
+        APP_NAME = 'msr-viz'
+    }
+
+    stages {
+        stage('Helm') {
+            steps {
+               container('helm') { 
+                 sh 'helm repo add bitnami https://charts.bitnami.com/bitnami'
+                 sh "helm version"
+                 sh 'helm install redis-svc bitnami/redis --namespace $NAMESPACE --dry-run --debug'
+               }    
+             }
+        } 
+    }
+}
+
+
+
+pipeline {
+    agent { 
+        kubernetes {
+        inheritFrom  'jenkins-slave'
+        }
+    }
+    environment{
+        NAMESPACE = 'default'
+    }
+
+    stages {
+        stage('Helm') {
+        agent {
+            kubernetes {
+      yaml '''
+        apiVersion: v1
+        kind: Pod
+        spec:
+          containers:
+          - name: helm
+            image: alpine/helm:3.11.1
+            command:
+            - cat
+            tty: true
+        '''
+        }
+      }
+            steps {
+               container('helm') { 
+                 sh 'helm repo add bitnami https://charts.bitnami.com/bitnami'
+                 sh "helm version"
+                 sh 'helm status k8sapp-msr-viz --namespace $NAMESPACE'
+               }    
+             }
+        } 
+    }
+}
+
