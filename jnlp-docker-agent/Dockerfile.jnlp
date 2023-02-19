@@ -1,7 +1,7 @@
 FROM adoptopenjdk/openjdk8:jdk8u292-b10-debian
 
 RUN mkdir -p /etc/docker && echo '{ dns: [10.0.0.2, 10.0.0.3] }' > /etc/docker/daemon.json
-RUN apt-get update -y && apt-get install -y curl sudo git
+RUN apt-get update -y && apt-get install -y curl sudo git jq
 
 #Install docker
 RUN curl -sSL https://get.docker.com/ | sh
