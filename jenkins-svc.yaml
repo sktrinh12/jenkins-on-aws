@@ -6,7 +6,6 @@ metadata:
   labels:
     app: jenkins
 spec:
-  type: LoadBalancer
   ports:
     - name: http
       protocol: TCP
